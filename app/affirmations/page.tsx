@@ -5,9 +5,14 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Navigation from "@/components/navigation"
-import { Heart, Share2, Bookmark, RefreshCw, Calendar, Sparkles } from "lucide-react"
+import { Heart, Share2, Bookmark, RefreshCw, Calendar, Sparkles, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useAffirmations } from "@/hooks/use-affirmations"
+import { useAuth } from "@/contexts/auth-context"
 
 const affirmationCategories = [
   { id: "all", name: "All", color: "bg-gray-100 text-gray-800" },
@@ -17,111 +22,31 @@ const affirmationCategories = [
   { id: "healing", name: "Healing", color: "bg-green-100 text-green-800" },
 ]
 
-const affirmationsData = [
-  {
-    id: 1,
-    text: "I am worthy of love and respect exactly as I am.",
-    category: "self-worth",
-    image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop",
-    likes: 234,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 2,
-    text: "My body is my home, and I treat it with kindness and compassion.",
-    category: "body",
-    image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=300&fit=crop",
-    likes: 189,
-    isLiked: true,
-    isSaved: false,
-  },
-  {
-    id: 3,
-    text: "I celebrate my unique beauty and embrace what makes me different.",
-    category: "confidence",
-    image: "https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?w=400&h=300&fit=crop",
-    likes: 156,
-    isLiked: false,
-    isSaved: true,
-  },
-  {
-    id: 4,
-    text: "I am healing and growing stronger every day.",
-    category: "healing",
-    image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop",
-    likes: 298,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 5,
-    text: "My worth is not determined by my appearance - I am valuable beyond measure.",
-    category: "self-worth",
-    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=300&fit=crop",
-    likes: 267,
-    isLiked: true,
-    isSaved: true,
-  },
-  {
-    id: 6,
-    text: "I choose to speak to myself with the same kindness I show my best friend.",
-    category: "healing",
-    image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=300&fit=crop",
-    likes: 178,
-    isLiked: false,
-    isSaved: false,
-  },
-]
-
 export default function AffirmationsPage() {
-  const [affirmations, setAffirmations] = useState(affirmationsData)
   const [selectedCategory, setSelectedCategory] = useState("all")
-  const [dailyAffirmation, setDailyAffirmation] = useState(affirmationsData[0])
+  const [dailyAffirmationIndex, setDailyAffirmationIndex] = useState(0)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newAffirmation, setNewAffirmation] = useState("")
+  const [newCategory, setNewCategory] = useState("self-worth")
   const { toast } = useToast()
+  const { user } = useAuth()
+  const { affirmations, loading, toggleLike, toggleSave, createAffirmation } = useAffirmations()
 
   const filteredAffirmations =
     selectedCategory === "all" ? affirmations : affirmations.filter((a) => a.category === selectedCategory)
 
-  const handleLike = (id: number) => {
-    setAffirmations((prev) =>
-      prev.map((affirmation) =>
-        affirmation.id === id
-          ? {
-              ...affirmation,
-              isLiked: !affirmation.isLiked,
-              likes: affirmation.isLiked ? affirmation.likes - 1 : affirmation.likes + 1,
-            }
-          : affirmation,
-      ),
-    )
-  }
+  const featuredAffirmations = affirmations.filter((a) => a.is_featured)
+  const dailyAffirmation = featuredAffirmations[dailyAffirmationIndex] || affirmations[0]
 
-  const handleSave = (id: number) => {
-    setAffirmations((prev) =>
-      prev.map((affirmation) =>
-        affirmation.id === id ? { ...affirmation, isSaved: !affirmation.isSaved } : affirmation,
-      ),
-    )
-
-    const affirmation = affirmations.find((a) => a.id === id)
-    toast({
-      title: affirmation?.isSaved ? "Removed from saved" : "Saved!",
-      description: affirmation?.isSaved
-        ? "Affirmation removed from your collection"
-        : "Affirmation added to your collection",
-    })
-  }
-
-  const handleShare = (affirmation: (typeof affirmationsData)[0]) => {
+  const handleShare = (affirmation: any) => {
     if (navigator.share) {
       navigator.share({
         title: "Body Positive Affirmation",
-        text: affirmation.text,
+        text: affirmation.content,
         url: window.location.href,
       })
     } else {
-      navigator.clipboard.writeText(affirmation.text)
+      navigator.clipboard.writeText(affirmation.content)
       toast({
         title: "Copied to clipboard!",
         description: "Affirmation copied to your clipboard",
@@ -130,8 +55,51 @@ export default function AffirmationsPage() {
   }
 
   const getNewDailyAffirmation = () => {
-    const randomIndex = Math.floor(Math.random() * affirmationsData.length)
-    setDailyAffirmation(affirmationsData[randomIndex])
+    const maxIndex = featuredAffirmations.length > 0 ? featuredAffirmations.length - 1 : affirmations.length - 1
+    setDailyAffirmationIndex((prev) => (prev + 1) % (maxIndex + 1))
+  }
+
+  const handleCreateAffirmation = async () => {
+    if (!user) {
+      toast({
+        title: "Please sign in",
+        description: "You need to be signed in to create affirmations",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!newAffirmation.trim()) return
+
+    const result = await createAffirmation(newAffirmation, newCategory)
+
+    if (result?.error) {
+      toast({
+        title: "Error",
+        description: "Failed to create affirmation",
+        variant: "destructive",
+      })
+    } else {
+      toast({
+        title: "Affirmation created!",
+        description: "Your affirmation has been shared with the community",
+      })
+      setNewAffirmation("")
+      setShowCreateModal(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-indigo-900/20">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -148,52 +116,101 @@ export default function AffirmationsPage() {
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Discover powerful affirmations to boost your self-love and confidence every day
           </p>
+
+          {user && (
+            <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+              <DialogTrigger asChild>
+                <Button className="mt-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Affirmation
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Affirmation</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Textarea
+                    placeholder="Write your affirmation..."
+                    value={newAffirmation}
+                    onChange={(e) => setNewAffirmation(e.target.value)}
+                    className="min-h-[100px]"
+                  />
+                  <Select value={newCategory} onValueChange={setNewCategory}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {affirmationCategories.slice(1).map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateAffirmation} disabled={!newAffirmation.trim()}>
+                      Create
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Daily Featured Affirmation */}
-        <Card className="mb-12 overflow-hidden shadow-xl border-0 bg-gradient-to-r from-pink-500/10 to-purple-600/10 animate-slide-up">
-          <CardContent className="p-0">
-            <div className="grid md:grid-cols-2 gap-0">
-              <div className="relative h-64 md:h-auto">
-                <Image
-                  src={dailyAffirmation.image || "/placeholder.svg"}
-                  alt="Daily affirmation"
-                  fill
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-600/20" />
-              </div>
-              <div className="p-8 flex flex-col justify-center">
-                <div className="flex items-center mb-4">
-                  <Calendar className="w-5 h-5 text-primary mr-2" />
-                  <span className="text-sm font-medium text-primary">Today's Featured</span>
+        {dailyAffirmation && (
+          <Card className="mb-12 overflow-hidden shadow-xl border-0 bg-gradient-to-r from-pink-500/10 to-purple-600/10 animate-slide-up">
+            <CardContent className="p-0">
+              <div className="grid md:grid-cols-2 gap-0">
+                <div className="relative h-64 md:h-auto">
+                  <Image
+                    src={dailyAffirmation.image_url || "/placeholder.svg"}
+                    alt="Daily affirmation"
+                    fill
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-600/20" />
                 </div>
-                <blockquote className="text-2xl font-medium leading-relaxed mb-6">"{dailyAffirmation.text}"</blockquote>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleLike(dailyAffirmation.id)}
-                      className={dailyAffirmation.isLiked ? "text-red-500" : ""}
-                    >
-                      <Heart className={`w-4 h-4 mr-1 ${dailyAffirmation.isLiked ? "fill-current" : ""}`} />
-                      {dailyAffirmation.likes}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleShare(dailyAffirmation)}>
-                      <Share2 className="w-4 h-4 mr-1" />
-                      Share
+                <div className="p-8 flex flex-col justify-center">
+                  <div className="flex items-center mb-4">
+                    <Calendar className="w-5 h-5 text-primary mr-2" />
+                    <span className="text-sm font-medium text-primary">Today's Featured</span>
+                  </div>
+                  <blockquote className="text-2xl font-medium leading-relaxed mb-6">
+                    "{dailyAffirmation.content}"
+                  </blockquote>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleLike(dailyAffirmation.id)}
+                        className={dailyAffirmation.is_liked ? "text-red-500" : ""}
+                        disabled={!user}
+                      >
+                        <Heart className={`w-4 h-4 mr-1 ${dailyAffirmation.is_liked ? "fill-current" : ""}`} />
+                        {dailyAffirmation.likes_count}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleShare(dailyAffirmation)}>
+                        <Share2 className="w-4 h-4 mr-1" />
+                        Share
+                      </Button>
+                    </div>
+                    <Button onClick={getNewDailyAffirmation} variant="outline" size="sm">
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      New Daily
                     </Button>
                   </div>
-                  <Button onClick={getNewDailyAffirmation} variant="outline" size="sm">
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    New Daily
-                  </Button>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Category Filter */}
         <div className="flex flex-wrap gap-2 mb-8 justify-center">
@@ -222,7 +239,7 @@ export default function AffirmationsPage() {
               <CardContent className="p-0">
                 <div className="relative h-48 overflow-hidden">
                   <Image
-                    src={affirmation.image || "/placeholder.svg"}
+                    src={affirmation.image_url || "/placeholder.svg"}
                     alt="Affirmation background"
                     fill
                     className="object-cover group-hover:scale-110 transition-transform duration-300"
@@ -232,27 +249,29 @@ export default function AffirmationsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleSave(affirmation.id)}
+                      onClick={() => toggleSave(affirmation.id)}
                       className={`bg-white/20 backdrop-blur-sm hover:bg-white/30 ${
-                        affirmation.isSaved ? "text-yellow-400" : "text-white"
+                        affirmation.is_saved ? "text-yellow-400" : "text-white"
                       }`}
+                      disabled={!user}
                     >
-                      <Bookmark className={`w-4 h-4 ${affirmation.isSaved ? "fill-current" : ""}`} />
+                      <Bookmark className={`w-4 h-4 ${affirmation.is_saved ? "fill-current" : ""}`} />
                     </Button>
                   </div>
                 </div>
                 <div className="p-6">
-                  <blockquote className="text-lg font-medium leading-relaxed mb-4">"{affirmation.text}"</blockquote>
+                  <blockquote className="text-lg font-medium leading-relaxed mb-4">"{affirmation.content}"</blockquote>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleLike(affirmation.id)}
-                        className={affirmation.isLiked ? "text-red-500" : ""}
+                        onClick={() => toggleLike(affirmation.id)}
+                        className={affirmation.is_liked ? "text-red-500" : ""}
+                        disabled={!user}
                       >
-                        <Heart className={`w-4 h-4 mr-1 ${affirmation.isLiked ? "fill-current" : ""}`} />
-                        {affirmation.likes}
+                        <Heart className={`w-4 h-4 mr-1 ${affirmation.is_liked ? "fill-current" : ""}`} />
+                        {affirmation.likes_count}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleShare(affirmation)}>
                         <Share2 className="w-4 h-4" />
@@ -267,6 +286,14 @@ export default function AffirmationsPage() {
             </Card>
           ))}
         </div>
+
+        {filteredAffirmations.length === 0 && (
+          <div className="text-center py-12">
+            <Sparkles className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No affirmations found</h3>
+            <p className="text-muted-foreground">Try selecting a different category or create your own!</p>
+          </div>
+        )}
       </div>
     </div>
   )
