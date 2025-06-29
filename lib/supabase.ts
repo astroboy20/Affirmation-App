@@ -1,23 +1,20 @@
-;/>
-\
-1. **Replace the entire file
-with the content
-below**
+// lib/supabase.ts
 
-```ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 /**
  * Creates – or returns – a cached Supabase client.
- * If your environment variables are missing we fall back to
- * obvious placeholders so the preview keeps running (network
- * requests will simply fail instead of crashing the build).
+ * If your environment variables are missing, we fall back to
+ * placeholders so the app keeps working during preview/development.
+ * Network requests will fail gracefully instead of crashing.
  *
- * In production you MUST set:
- *   NEXT_PUBLIC_SUPABASE_URL
- *   NEXT_PUBLIC_SUPABASE_ANON_KEY
- *   SUPABASE_SERVICE_ROLE_KEY  (server only)
+ * Required Environment Variables:
+ * - NEXT_PUBLIC_SUPABASE_URL
+ * - NEXT_PUBLIC_SUPABASE_ANON_KEY
+ * - SUPABASE_SERVICE_ROLE_KEY (server only)
  */
+
+// === CLIENT SIDE ===
 export const getBrowserClient = (() => {
   let client: SupabaseClient | null = null
 
@@ -36,15 +33,13 @@ export const getBrowserClient = (() => {
 })()
 
 /**
- * Convenience export so existing imports keep working:
+ * Exporting default browser client
+ * Usage:
  *   import { supabase } from "@/lib/supabase"
  */
 export const supabase = getBrowserClient()
 
-/**
- * Server-side client – only initialised when called, so it
- * won’t explode during a client-side bundle.
- */
+// === SERVER SIDE ===
 export const createServerClient = () => {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -53,6 +48,9 @@ export const createServerClient = () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY || "SERVICE_ROLE_KEY_MISSING"
 
   return createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   })
 }
